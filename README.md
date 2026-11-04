@@ -25,7 +25,7 @@ Two tools are included:
 The GTK app additionally lets you:
 
 * See all saved locations and **remove** them
-* New locations are added at the top of the list and become the current location
+* New locations are added at the **top** of the list and become the current location
 * Enter coordinates with `.` or `,` as decimal separator
 * Choose whether GNOME Weather should be restarted after a change
 
@@ -65,6 +65,26 @@ Make sure `~/.local/bin` is in your `PATH`. The app then appears in the applicat
 
 ### Arch Linux
 
+**Prebuilt binary (recommended, quick install):**
+
+A `gweather-add-loc-bin` package is available on the [AUR](https://aur.archlinux.org/packages/gweather-add-loc-bin):
+
+Using an AUR helper (e.g. `yay`):
+
+```bash
+yay -S gweather-add-loc-bin
+```
+
+Or manually:
+
+```bash
+git clone https://aur.archlinux.org/gweather-add-loc-bin.git
+cd gweather-add-loc-bin
+makepkg -si
+```
+
+**Build from source:**
+
 A `PKGBUILD` contributed by [@Mel34](https://github.com/Mel34) is available in [`contrib/arch/`](contrib/arch/PKGBUILD). It builds the GTK app from source and also installs the Bash script as `gweather-add-loc.sh`:
 
 ```bash
@@ -73,7 +93,7 @@ cd gweather-add-loc/contrib/arch
 makepkg -si
 ```
 
-The `PKGBUILD` is community-maintained and not tested by the repository owner. Please open an issue or a pull request if something breaks.
+The source `PKGBUILD` is community-maintained and not tested by the repository owner. Please open an issue or a pull request if something breaks.
 
 ## 📜 Bash script
 

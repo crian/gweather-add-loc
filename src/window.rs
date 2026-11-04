@@ -96,7 +96,7 @@ impl Ui {
             return;
         }
         let result = self.store.entries().and_then(|mut entries| {
-            entries.push(Store::build_entry(&name, lat, lon)?);
+            entries.insert(0, Store::build_entry(&name, lat, lon)?);
             self.store.set_entries(&entries)
         });
         if let Err(e) = result {

@@ -39,6 +39,9 @@ jobs:
           mkdir -p "dist/$NAME"
           cp target/release/gweather-add-loc "dist/$NAME/"
           cp -r data Makefile "dist/$NAME/"
+          [ -f LICENSE ] && cp LICENSE "dist/$NAME/"
+          [ -f gweather-add-loc.sh ] && cp gweather-add-loc.sh "dist/$NAME/"
+          [ -f README.md ] && cp README.md "dist/$NAME/"
           cat > "dist/$NAME/INSTALL.txt" <<'TXT'
           Weather Locations - prebuilt binary (Linux x86_64)
 

@@ -3,6 +3,7 @@
 
 use gtk::glib::{self, prelude::ToVariant, Variant, VariantTy};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 pub const WEATHER_ID: &str = "org.gnome.Weather";
@@ -11,14 +12,19 @@ pub struct Store {
     flatpak: bool,
 }
 
+// Cache for flatpak detection result (avoids repeated `flatpak list` calls)
+static FLATPAK_CACHE: OnceLock<bool> = OnceLock::new();
+
 fn is_flatpak_install() -> bool {
-    Command::new("flatpak")
-        .args(["list", "--app", "--columns=application"])
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.split_whitespace().any(|l| l == WEATHER_ID))
-        .unwrap_or(false)
+    *FLATPAK_CACHE.get_or_init(|| {
+        Command::new("flatpak")
+            .args(["list", "--app", "--columns=application"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.split_whitespace().any(|l| l == WEATHER_ID))
+            .unwrap_or(false)
+    })
 }
 
 impl Store {

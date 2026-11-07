@@ -1,7 +1,7 @@
 # Maintainer: Your Name <your.email@example.com>
 
 pkgname=gweather-add-loc
-pkgver=0.1.1
+pkgver=0.1.2
 pkgrel=1
 pkgdesc="Add custom locations with arbitrary coordinates to GNOME Weather"
 arch=('x86_64')
@@ -32,9 +32,7 @@ source=(
     "$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
 )
 
-sha256sums=(
-    '15bb9ac198b064b716e0ee97c769e3d7df6da7372c427fe6779231843907cc9f'
-)
+sha256sums=('6645e313bd52e0998b9752995788d5f042faa09d9b91df508165c5dfd10a0fc1')
 
 prepare() {
     cd "$pkgname-$pkgver"

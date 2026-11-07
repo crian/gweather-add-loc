@@ -95,10 +95,18 @@ impl Ui {
             self.toast("Coordinates out of range");
             return;
         }
-        let result = self.store.entries().and_then(|mut entries| {
-            entries.insert(0, Store::build_entry(&name, lat, lon)?);
-            self.store.set_entries(&entries)
+        if !lat.is_finite() || !lon.is_finite() {
+            self.toast("Coordinates must be finite numbers");
+            return;
+        }
+
+        let name_clone = name.clone();
+        let result = self.store.update_entries(|entries| {
+            let mut new_entries = entries.to_vec();
+            new_entries.insert(0, Store::build_entry(&name_clone, lat, lon)?);
+            Ok(new_entries)
         });
+
         if let Err(e) = result {
             self.toast(&format!("Error: {e}"));
             return;
@@ -110,18 +118,26 @@ impl Ui {
     }
 
     fn on_remove(self: &Rc<Self>, idx: usize) {
-        let result = self.store.entries().and_then(|mut entries| {
+        let name = Rc::new(RefCell::new(None::<String>));
+        let name_clone = name.clone();
+
+        let result = self.store.update_entries(move |entries| {
             if idx >= entries.len() {
-                return Ok(None);
+                return Err("Index out of bounds".into());
             }
-            let name = Store::describe(&entries[idx]).0;
-            entries.remove(idx);
-            self.store.set_entries(&entries)?;
-            Ok(Some(name))
+            let n = Store::describe(&entries[idx]).0;
+            *name_clone.borrow_mut() = Some(n);
+            let mut new_entries = entries.to_vec();
+            new_entries.remove(idx);
+            Ok(new_entries)
         });
+
         match result {
-            Ok(Some(name)) => self.finish(&format!("Removed \u{201c}{name}\u{201d}")),
-            Ok(None) => {}
+            Ok(_) => {
+                if let Some(n) = name.borrow().as_ref() {
+                    self.finish(&format!("Removed \u{201c}{n}\u{201d}"));
+                }
+            }
             Err(e) => self.toast(&format!("Error: {e}")),
         }
     }

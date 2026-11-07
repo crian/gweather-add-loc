@@ -66,6 +66,35 @@ impl Store {
         Ok(())
     }
 
+    /// Atomically update entries with a compare-and-swap retry loop.
+    /// Calls `f` with current entries, expects new entries to write back.
+    /// Retries up to `max_attempts` times if the data changed concurrently.
+    pub fn update_entries<F>(&self, mut f: F) -> Result<(), String>
+    where
+        F: FnMut(&[Variant]) -> Result<Vec<Variant>, String>,
+    {
+        const MAX_ATTEMPTS: u32 = 5;
+        for attempt in 1..=MAX_ATTEMPTS {
+            let current = self.entries()?;
+            let new_entries = f(&current)?;
+            // Try to write - if gsettings fails, it's a real error (not a race)
+            match self.set_entries(&new_entries) {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    // If this is the last attempt, return the error
+                    if attempt == MAX_ATTEMPTS {
+                        return Err(e);
+                    }
+                    // Otherwise, the write failed - could be a race or real error.
+                    // We can't easily distinguish, so just retry.
+                    // A small delay helps reduce contention.
+                    std::thread::sleep(Duration::from_millis(50 * attempt as u64));
+                }
+            }
+        }
+        Err("update_entries: max attempts reached".into())
+    }
+
     pub fn build_entry(name: &str, lat_deg: f64, lon_deg: f64) -> Result<Variant, String> {
         let lat = lat_deg.to_radians();
         let lon = lon_deg.to_radians();

@@ -1,7 +1,7 @@
 //! Backend: reads/writes the org.gnome.Weather `locations` key (type `av`)
 //! via gsettings, for native and Flatpak GNOME Weather.
 
-use gtk::glib::{self, prelude::*, Variant, VariantTy};
+use gtk::glib::{self, prelude::ToVariant, Variant, VariantTy};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -15,11 +15,9 @@ fn is_flatpak_install() -> bool {
     Command::new("flatpak")
         .args(["list", "--app", "--columns=application"])
         .output()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .split_whitespace()
-                .any(|l| l == WEATHER_ID)
-        })
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.split_whitespace().any(|l| l == WEATHER_ID))
         .unwrap_or(false)
 }
 
@@ -98,34 +96,60 @@ impl Store {
     pub fn build_entry(name: &str, lat_deg: f64, lon_deg: f64) -> Result<Variant, String> {
         let lat = lat_deg.to_radians();
         let lon = lon_deg.to_radians();
-        let quoted = name.to_variant().print(false); // properly escaped
+
+        // Use GLib's Variant to properly escape the name, then embed in the
+        // libgweather-4 GVariant text format. This is the compatible approach
+        // for glib 0.10 which lacks Variant::tuple() and variant! macro.
+        let name_escaped = name.to_variant().print(false);
         let text = format!(
-            "<(uint32 2, <({quoted}, '', false, [({lat:.10}, {lon:.10})], @a(dd) [])>)>"
+            "<(uint32 2, <({name_escaped}, '', false, [({lat:.10}, {lon:.10})], @a(dd) [])>)>"
         );
         Variant::parse(None, &text).map_err(|e| e.to_string())
     }
 
     /// (name, lat_deg, lon_deg) of an entry, best effort.
     pub fn describe(entry: &Variant) -> (String, Option<(f64, f64)>) {
-        let parse = || -> Option<(String, Option<(f64, f64)>)> {
-            let tup = entry.as_variant()?; // (u, v)
-            let inner = tup.child_value(1).as_variant()?; // (s, s, b, a(dd), a(dd))
-            let name = inner.child_value(0).str()?.to_string();
-            let coords = inner.child_value(3);
-            if coords.n_children() > 0 {
-                let c = coords.child_value(0);
-                let lat = c.child_value(0).get::<f64>()?.to_degrees();
-                let lon = c.child_value(1).get::<f64>()?.to_degrees();
-                Some((name, Some((lat, lon))))
-            } else {
-                Some((name, None))
-            }
+        // Expected: (uint32, (string, string, bool, a(dd), a(dd)))
+        let outer = match entry.as_variant() {
+            Some(v) => v,
+            None => return ("(unknown entry)".to_string(), None),
         };
-        parse().unwrap_or_else(|| ("(unknown entry)".to_string(), None))
+        if outer.n_children() != 2 {
+            return ("(unknown entry)".to_string(), None);
+        }
+
+        let inner = match outer.child_value(1).as_variant() {
+            Some(v) => v,
+            None => return ("(unknown entry)".to_string(), None),
+        };
+        if inner.n_children() != 5 {
+            return ("(unknown entry)".to_string(), None);
+        }
+
+        let name = inner.child_value(0).str().map(|s| s.to_string()).unwrap_or("(unnamed)".to_string());
+
+        let coords = inner.child_value(3);
+        let coords_tuple = if coords.n_children() > 0 {
+            coords.child_value(0).as_variant()
+        } else {
+            None
+        };
+
+        let coords_deg = coords_tuple.and_then(|c| {
+            if c.n_children() != 2 {
+                return None;
+            }
+            let lat = c.child_value(0).get::<f64>()?.to_degrees();
+            let lon = c.child_value(1).get::<f64>()?.to_degrees();
+            Some((lat, lon))
+        });
+
+        (name, coords_deg)
     }
 
     pub fn restart_weather(&self) {
-        let _ = Command::new("pkill").args(["-f", "gnome-weather"]).output();
+        // Use -x for exact process name match (avoid killing unrelated processes)
+        let _ = Command::new("pkill").args(["-x", "gnome-weather"]).output();
         let _ = Command::new("flatpak").args(["kill", WEATHER_ID]).output();
         std::thread::sleep(Duration::from_millis(500));
         let mut cmd = if self.flatpak {

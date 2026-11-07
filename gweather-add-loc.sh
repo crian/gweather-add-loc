@@ -72,18 +72,49 @@ if ! in_range "$LON" 180; then
     exit 1
 fi
 
-# Build the GVariant entry
-# Degrees -> radians. awk's %f always prints a decimal point and a leading zero
-# (e.g. "0.0000000000"), so GVariant parses the values as doubles, not integers.
-to_rad() { LC_ALL=C awk -v d="$1" 'BEGIN { printf "%.10f", d * atan2(0, -1) / 180 }'; }
-LAT_RAD=$(to_rad "$LAT")
-LON_RAD=$(to_rad "$LON")
+# Build the GVariant entry using Python + GLib (robust, handles all escaping)
+# Falls back to awk-based method if python3-gi not available.
+build_gvariant_entry() {
+    local name="$1" lat_deg="$2" lon_deg="$3"
 
-# Escape backslashes and single quotes so names like "Coeur d'Alene" work.
-NAME_ESC=${NAME//\\/\\\\}
-NAME_ESC=${NAME_ESC//\'/\\\'}
+    # Try Python with GLib first (proper GVariant encoding)
+    if python3 -c "import gi; gi.require_version('GLib', '2.0'); from gi.repository import GLib" 2>/dev/null; then
+        python3 -c "
+import sys
+import math
+from gi.repository import GLib
 
-NEW_ENTRY="<(uint32 2, <('$NAME_ESC', '', false, [($LAT_RAD, $LON_RAD)], @a(dd) [])>)>"
+name = sys.argv[1]
+lat_deg = float(sys.argv[2])
+lon_deg = float(sys.argv[3])
+
+lat = math.radians(lat_deg)
+lon = math.radians(lon_deg)
+
+# Build: (uint32 2, (string name, string '', boolean false, array of (double,double), array of (double,double)))
+coord_tuple = GLib.Variant('(dd)', [lat, lon])
+coords_array = GLib.Variant('a(dd)', [coord_tuple])
+empty_array = GLib.Variant('a(dd)', [])
+inner = GLib.Variant('(ssba(dd)a(dd))', [name, '', False, coords_array, empty_array])
+outer = GLib.Variant('(uv)', [2, inner])
+
+# Print in GVariant text format
+print(outer.print(False))
+" "$name" "$lat_deg" "$lon_deg"
+        return
+    fi
+
+    # Fallback: awk-based method (original)
+    to_rad() { LC_ALL=C awk -v d="$1" 'BEGIN { printf "%.10f", d * atan2(0, -1) / 180 }'; }
+    LAT_RAD=$(to_rad "$lat_deg")
+    LON_RAD=$(to_rad "$lon_deg")
+    NAME_ESC=${name//\\/\\\\}
+    NAME_ESC=${NAME_ESC//\'/\\\'}
+    echo "<(uint32 2, <('$NAME_ESC', '', false, [($LAT_RAD, $LON_RAD)], @a(dd) [])>)>"
+}
+
+# Build entry
+NEW_ENTRY=$(build_gvariant_entry "$NAME" "$LAT" "$LON")
 
 # Check Flatpak or native
 IS_FLATPAK=false
@@ -122,7 +153,7 @@ if [ "$RESTART" = true ]; then
     if [ "$IS_FLATPAK" = true ]; then
         flatpak kill "$APP_ID" 2>/dev/null
     else
-        pkill -f gnome-weather 2>/dev/null
+        pkill -x gnome-weather 2>/dev/null
     fi
 
     sleep 0.5

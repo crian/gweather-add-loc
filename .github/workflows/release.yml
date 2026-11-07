@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          cp target/release/gweather-add-loc release/
+          cp data/io.github.crian.GWeatherAddLoc.desktop release/
+          cp data/io.github.crian.GWeatherAddLoc.metainfo.xml release/
+          cp -r data/icons release/
+          cp gweather-add-loc.sh release/
+          chmod +x release/gweather-add-loc.sh
+          tar -czf gweather-add-loc-${{ github.ref_name }}-x86_64-linux.tar.gz -C release .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: gweather-add-loc-${{ github.ref_name }}-x86_64-linux.tar.gz
+          generate_release_notes: true
+          draft: false
+          prerelease: false

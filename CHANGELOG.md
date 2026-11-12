@@ -9,9 +9,21 @@ with [git-cliff](https://git-cliff.org/).
 
 ## Unreleased
 
+## 0.1.4 - 2026-11-12
+
+### Added
+
+- Show author and release notes in about dialog
+
+### Fixed
+
+- Include install files in release archive
+
 ### Internal
 
 - Add GitHub Actions workflows for build, test, lint and release
+- Automate release changelog and PKGBUILD bump
+- Read the changelog version from the file
 
 ## 0.1.3 - 2026-11-07
 

@@ -41,6 +41,8 @@ The GTK app additionally lets you:
 Download `gweather-add-loc-<version>-x86_64-linux.tar.gz` from the [Releases](https://github.com/crian/gweather-add-loc/releases) page, extract it and run:
 
 ```bash
+tar -xzf gweather-add-loc-<version>-x86_64-linux.tar.gz
+cd gweather-add-loc-<version>-x86_64-linux
 make install-files BINPATH=./gweather-add-loc
 ```
 

@@ -65,21 +65,22 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          mkdir -p release
-          cp target/release/gweather-add-loc release/
-          cp Makefile README.md LICENSE release/
-          cp -r data release/data
-          cp gweather-add-loc.sh release/
-          cp CHANGELOG.md release/
-          chmod +x release/gweather-add-loc.sh
-          tar -czf gweather-add-loc-${{ github.ref_name }}-x86_64-linux.tar.gz -C release .
+          name="gweather-add-loc-${GITHUB_REF_NAME#v}-x86_64-linux"
+          mkdir -p "release/$name"
+          cp target/release/gweather-add-loc "release/$name/"
+          cp Makefile README.md LICENSE "release/$name/"
+          cp -r data "release/$name/data"
+          cp gweather-add-loc.sh CHANGELOG.md "release/$name/"
+          chmod +x "release/$name/gweather-add-loc.sh"
+          tar -czf "$name.tar.gz" -C release "$name"
+          echo "ASSET=$name.tar.gz" >> "$GITHUB_ENV"
 
       - name: Check release archive
         run: |
           dir="$(mktemp -d)"
-          tar -xzf "gweather-add-loc-${GITHUB_REF_NAME}-x86_64-linux.tar.gz" -C "$dir"
-          make -C "$dir" install-files \
-            BINPATH="$dir/gweather-add-loc" PREFIX=/usr DESTDIR="$dir/root"
+          tar -xzf "$ASSET" -C "$dir"
+          make -C "$dir/${ASSET%.tar.gz}" install-files \
+            BINPATH="$dir/${ASSET%.tar.gz}/gweather-add-loc" PREFIX=/usr DESTDIR="$dir/root"
           test -x "$dir/root/usr/bin/gweather-add-loc"
           test -f "$dir/root/usr/share/applications/io.github.crian.GWeatherAddLoc.desktop"
           test -f "$dir/root/usr/share/metainfo/io.github.crian.GWeatherAddLoc.metainfo.xml"
@@ -89,7 +90,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: gweather-add-loc-${{ github.ref_name }}-x86_64-linux.tar.gz
+          files: ${{ env.ASSET }}
           body_path: release-notes.md
           draft: false
           prerelease: false

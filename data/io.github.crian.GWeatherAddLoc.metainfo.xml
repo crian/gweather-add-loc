@@ -3,6 +3,9 @@
   <id>io.github.crian.GWeatherAddLoc</id>
   <name>Weather Locations</name>
   <summary>Add custom locations to GNOME Weather</summary>
+  <developer id="io.github.crian">
+    <name>crian</name>
+  </developer>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
   <description>

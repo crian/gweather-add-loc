@@ -3,6 +3,7 @@ name = "gweather-add-loc"
 version = "0.1.3"
 edition = "2021"
 license = "MIT"
+authors = ["crian <crian84@gmail.com>"]
 description = "GTK4/libadwaita app to add custom locations to GNOME Weather"
 
 [dependencies]

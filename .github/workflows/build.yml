@@ -5,43 +5,101 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   build:
-    name: Build (Rust)
-    runs-on: ubuntu-latest
+    name: Build & Test (Rust)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
 
-      - name: Build
-        run: cargo build --release --locked
-
       - name: Run tests
         run: cargo test --locked
 
+      - name: Build
+        run: cargo build --release --locked
+
   lint:
-    name: Lint (Bash)
-    runs-on: ubuntu-latest
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
-      - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Install linters
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck appstream desktop-file-utils
 
-      - name: Lint gweather-add-loc.sh
-        run: shellcheck gweather-add-loc.sh
+      - name: Install git-cliff
+        run: |
+          curl -fsSL -o git-cliff.tar.gz \
+            https://github.com/orhun/git-cliff/releases/download/v2.14.2/git-cliff-2.14.2-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf git-cliff.tar.gz
+          sudo install -m755 git-cliff-2.14.2/git-cliff /usr/local/bin/git-cliff
+
+      - name: Lint shell scripts
+        run: |
+          shellcheck \
+            gweather-add-loc.sh \
+            contrib/arch/bump.sh \
+            .github/scripts/changelog-entry.sh \
+            .github/scripts/update-changelog.sh
+
+      - name: Test changelog scripts
+        run: |
+          latest="$(git describe --tags --abbrev=0 --match 'v[0-9]*')"
+          entry="$RUNNER_TEMP/changelog-entry.md"
+          ./.github/scripts/changelog-entry.sh "$latest" > "$entry"
+          grep -q '^- ' "$entry"
+          tmp="$RUNNER_TEMP/changelog-test.md"
+          printf '# Changelog\n\n## Unreleased\n\n## 0.0.0 - 2000-01-01\n' > "$tmp"
+          ./.github/scripts/update-changelog.sh "$latest" "$tmp"
+          grep -qF "## ${latest#v} " "$tmp"
+
+      - name: Lint workflows
+        run: |
+          curl -fsSL -o actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          tar -xzf actionlint.tar.gz actionlint
+          ./actionlint -color
+
+      - name: Validate AppStream metadata
+        run: appstreamcli validate --no-net data/io.github.crian.GWeatherAddLoc.metainfo.xml
+
+      - name: Validate desktop entry
+        run: desktop-file-validate data/io.github.crian.GWeatherAddLoc.desktop
 
   build-script:
     name: Build Script Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 

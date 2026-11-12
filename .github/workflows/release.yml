@@ -6,17 +6,54 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   release:
     name: Create Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Check tag version
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
+
+      - name: Install git-cliff
+        run: |
+          curl -fsSL -o git-cliff.tar.gz \
+            https://github.com/orhun/git-cliff/releases/download/v2.14.2/git-cliff-2.14.2-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf git-cliff.tar.gz
+          sudo install -m755 git-cliff-2.14.2/git-cliff /usr/local/bin/git-cliff
+
+      - name: Generate release notes
+        run: |
+          ./.github/scripts/changelog-entry.sh "$GITHUB_REF_NAME" > release-notes.md
+          if [ ! -s release-notes.md ] || ! grep -q '^- ' release-notes.md; then
+            echo "::error::No changelog entries generated for $GITHUB_REF_NAME"
+            exit 1
+          fi
+          # Also use the new entry in the CHANGELOG.md shipped in the archive.
+          ./.github/scripts/update-changelog.sh "$GITHUB_REF_NAME"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
 
       - name: Install system dependencies
         run: |
@@ -34,6 +71,7 @@ jobs:
           cp data/io.github.crian.GWeatherAddLoc.metainfo.xml release/
           cp -r data/icons release/
           cp gweather-add-loc.sh release/
+          cp CHANGELOG.md release/
           chmod +x release/gweather-add-loc.sh
           tar -czf gweather-add-loc-${{ github.ref_name }}-x86_64-linux.tar.gz -C release .
 
@@ -41,6 +79,59 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: gweather-add-loc-${{ github.ref_name }}-x86_64-linux.tar.gz
-          generate_release_notes: true
+          body_path: release-notes.md
           draft: false
           prerelease: false
+
+  bump-pkgbuild:
+    name: Bump Arch PKGBUILD
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Check version matches main
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          current="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)"
+          if [ "$tag" != "$current" ]; then
+            echo "Tag v$tag does not match Cargo.toml version $current on main; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install git-cliff
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          curl -fsSL -o git-cliff.tar.gz \
+            https://github.com/orhun/git-cliff/releases/download/v2.14.2/git-cliff-2.14.2-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf git-cliff.tar.gz
+          sudo install -m755 git-cliff-2.14.2/git-cliff /usr/local/bin/git-cliff
+
+      - name: Update CHANGELOG.md
+        if: steps.version.outputs.skip != 'true'
+        run: ./.github/scripts/update-changelog.sh "${GITHUB_REF_NAME}"
+
+      - name: Update PKGBUILD
+        if: steps.version.outputs.skip != 'true'
+        run: ./contrib/arch/bump.sh "${GITHUB_REF_NAME}"
+
+      - name: Commit and push
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          if git diff --quiet -- CHANGELOG.md contrib/arch/PKGBUILD; then
+            echo "CHANGELOG.md and PKGBUILD are already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md contrib/arch/PKGBUILD
+          git commit -m "chore: release ${GITHUB_REF_NAME#v}"
+          git push origin HEAD:main

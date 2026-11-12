@@ -125,6 +125,41 @@ Add Berlin:
 
 The script validates the input, automatically converts the coordinates to radians, formats the `libgweather-4` GVariant string, updates `gsettings`, and restarts `gnome-weather` to apply the changes.
 
+## 🚀 Releasing
+
+1. Bump the version in `Cargo.toml` and `data/io.github.crian.GWeatherAddLoc.metainfo.xml`.
+2. Commit, tag with `vX.Y.Z` and push the tag.
+
+The release workflow verifies that the tag matches `Cargo.toml`, generates the release
+notes and a new [`CHANGELOG.md`](CHANGELOG.md) entry from the commits since the previous
+tag, builds the binary and updates [`contrib/arch/PKGBUILD`](contrib/arch/PKGBUILD)
+(version and checksum) on `main`.
+
+The changelog is generated with [git-cliff](https://git-cliff.org/) from
+[Conventional Commits](https://www.conventionalcommits.org/). Commit messages should
+therefore use prefixes such as `feat:`, `fix:`, `docs:`, `refactor:` or `ci:`;
+non-conventional messages end up under “Other”. The generated entry can be previewed
+locally after tagging (requires [git-cliff](https://git-cliff.org/), e.g. via
+`cargo install git-cliff`):
+
+```bash
+./.github/scripts/changelog-entry.sh vX.Y.Z
+```
+
+`CHANGELOG.md` is generated as a whole and should not be edited by hand. To rebuild it
+from all tags and commits:
+
+```bash
+git-cliff --config cliff.toml -o CHANGELOG.md
+```
+
+The changelog and PKGBUILD update can also be run manually after tagging:
+
+```bash
+./.github/scripts/update-changelog.sh vX.Y.Z
+./contrib/arch/bump.sh X.Y.Z
+```
+
 ## 📄 License
 
 MIT

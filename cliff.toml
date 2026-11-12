@@ -1,0 +1,54 @@
+# Configuration for git-cliff (https://git-cliff.org).
+# Release notes and CHANGELOG.md entries are generated from Conventional Commits.
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+This file is generated from [Conventional Commits](https://www.conventionalcommits.org/)
+with [git-cliff](https://git-cliff.org/).
+
+"""
+body = """
+{% if version %}## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") }}{% else %}## Unreleased{% endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+
+{% for commit in commits -%}
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | split(pat="\n") | first | trim | upper_first }}
+{% endfor -%}
+{% endfor %}
+
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "v[0-9]+\\.[0-9]+\\.[0-9]+"
+sort_commits = "oldest"
+
+commit_parsers = [
+    { message = "^feat", group = "Added" },
+    { message = "^fix", group = "Fixed" },
+    { message = "^docs", group = "Documentation" },
+    { message = "^refactor", group = "Changed" },
+    { message = "^perf", group = "Changed" },
+    { message = "^revert", group = "Fixed" },
+    { message = "^chore: release", skip = true },
+    { message = "^chore\\(release\\)", skip = true },
+    { message = "Bump version", skip = true },
+    { message = "^chore", group = "Internal" },
+    { message = "^ci", group = "Internal" },
+    { message = "^build", group = "Internal" },
+    { message = "^test", group = "Internal" },
+    { message = "^style", group = "Internal" },
+    { message = ".*", group = "Other" },
+]

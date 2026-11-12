@@ -67,13 +67,24 @@ jobs:
         run: |
           mkdir -p release
           cp target/release/gweather-add-loc release/
-          cp data/io.github.crian.GWeatherAddLoc.desktop release/
-          cp data/io.github.crian.GWeatherAddLoc.metainfo.xml release/
-          cp -r data/icons release/
+          cp Makefile README.md LICENSE release/
+          cp -r data release/data
           cp gweather-add-loc.sh release/
           cp CHANGELOG.md release/
           chmod +x release/gweather-add-loc.sh
           tar -czf gweather-add-loc-${{ github.ref_name }}-x86_64-linux.tar.gz -C release .
+
+      - name: Check release archive
+        run: |
+          dir="$(mktemp -d)"
+          tar -xzf "gweather-add-loc-${GITHUB_REF_NAME}-x86_64-linux.tar.gz" -C "$dir"
+          make -C "$dir" install-files \
+            BINPATH="$dir/gweather-add-loc" PREFIX=/usr DESTDIR="$dir/root"
+          test -x "$dir/root/usr/bin/gweather-add-loc"
+          test -f "$dir/root/usr/share/applications/io.github.crian.GWeatherAddLoc.desktop"
+          test -f "$dir/root/usr/share/metainfo/io.github.crian.GWeatherAddLoc.metainfo.xml"
+          test -f "$dir/root/usr/share/icons/hicolor/scalable/apps/io.github.crian.GWeatherAddLoc.svg"
+          test -f "$dir/root/usr/share/icons/hicolor/symbolic/apps/io.github.crian.GWeatherAddLoc-symbolic.svg"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

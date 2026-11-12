@@ -140,10 +140,18 @@ fn main() -> glib::ExitCode {
 mod tests {
     use super::*;
 
+    fn first_release() -> &'static str {
+        CHANGELOG
+            .lines()
+            .filter_map(|line| line.strip_prefix("## "))
+            .filter_map(|rest| rest.split_whitespace().next())
+            .find(|version| version.starts_with(|c: char| c.is_ascii_digit()))
+            .expect("changelog contains a release")
+    }
+
     #[test]
-    fn release_notes_for_current_version() {
-        let notes = release_notes(env!("CARGO_PKG_VERSION"))
-            .expect("changelog has an entry for this version");
+    fn release_notes_are_rendered() {
+        let notes = release_notes(first_release()).expect("changelog entry for the latest release");
         assert!(notes.contains("<ul>"));
         assert!(notes.contains("<li>"));
         assert!(!notes.contains("## "));

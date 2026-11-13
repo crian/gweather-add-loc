@@ -2,7 +2,7 @@
 # Contributor: Mel34 <13254332+Mel34@users.noreply.github.com>
 
 pkgname=gweather-add-loc
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc="Add custom locations with arbitrary coordinates to GNOME Weather"
 arch=('x86_64')
@@ -33,7 +33,7 @@ source=(
     "$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
 )
 
-sha256sums=('4cd16616b8cb06880e9830ac24b319077ea6aaa007f5c2d9760fdabdddb9de89')
+sha256sums=('03adf55bcd73746796639b30c67a1c3b33a192f2f9bd17d7919ea3cb6873f319')
 
 prepare() {
     cd "$pkgname-$pkgver"

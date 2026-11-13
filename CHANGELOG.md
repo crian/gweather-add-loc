@@ -9,6 +9,22 @@ with [git-cliff](https://git-cliff.org/).
 
 ## Unreleased
 
+## 0.1.5 - 2026-11-13
+
+### Fixed
+
+- Keep the release archive layout stable
+- Keep the UI responsive and restart the right install
+- Show coordinates of saved locations
+
+### Internal
+
+- Enforce formatting and lints
+
+### Other
+
+- Credit Mel34 as contributor
+
 ## 0.1.4 - 2026-11-12
 
 ### Added

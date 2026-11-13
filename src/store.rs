@@ -8,9 +8,8 @@ use std::time::Duration;
 
 pub const WEATHER_ID: &str = "org.gnome.Weather";
 
-pub struct Store {
-    flatpak: bool,
-}
+#[derive(Clone, Default)]
+pub struct Store;
 
 // Cache for flatpak detection result (avoids repeated `flatpak list` calls)
 static FLATPAK_CACHE: OnceLock<bool> = OnceLock::new();
@@ -29,11 +28,16 @@ fn is_flatpak_install() -> bool {
 
 impl Store {
     pub fn new() -> Self {
-        Self { flatpak: is_flatpak_install() }
+        Self
+    }
+
+    /// Detected lazily so the first call does not block at startup.
+    fn flatpak(&self) -> bool {
+        is_flatpak_install()
     }
 
     fn run(&self, args: &[&str]) -> Result<std::process::Output, String> {
-        let mut cmd = if self.flatpak {
+        let mut cmd = if self.flatpak() {
             let mut c = Command::new("flatpak");
             c.args(["run", "--command=gsettings", WEATHER_ID]);
             c
@@ -154,17 +158,17 @@ impl Store {
     }
 
     pub fn restart_weather(&self) {
-        // Use -x for exact process name match (avoid killing unrelated processes)
-        let _ = Command::new("pkill").args(["-x", "gnome-weather"]).output();
-        let _ = Command::new("flatpak").args(["kill", WEATHER_ID]).output();
-        std::thread::sleep(Duration::from_millis(500));
-        let mut cmd = if self.flatpak {
+        let mut cmd = if self.flatpak() {
+            let _ = Command::new("flatpak").args(["kill", WEATHER_ID]).output();
             let mut c = Command::new("flatpak");
             c.args(["run", WEATHER_ID]);
             c
         } else {
+            // Use -x for exact process name match (avoid killing unrelated processes)
+            let _ = Command::new("pkill").args(["-x", "gnome-weather"]).output();
             Command::new("gnome-weather")
         };
+        std::thread::sleep(Duration::from_millis(500));
         let _ = cmd.stdout(Stdio::null()).stderr(Stdio::null()).spawn();
     }
 }

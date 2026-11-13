@@ -9,6 +9,7 @@ description = "GTK4/libadwaita app to add custom locations to GNOME Weather"
 [dependencies]
 gtk = { package = "gtk4", version = "0.10", features = ["v4_6"] }
 adw = { package = "libadwaita", version = "0.8", features = ["v1_4"] }
+async-channel = "2"
 
 [profile.release]
 lto = true

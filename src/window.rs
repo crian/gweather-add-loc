@@ -3,7 +3,7 @@
 use crate::store::Store;
 use adw::prelude::*;
 use gtk::{gio, glib};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 struct Ui {
@@ -14,12 +14,26 @@ struct Ui {
     restart_row: adw::SwitchRow,
     list_group: adw::PreferencesGroup,
     rows: RefCell<Vec<adw::ActionRow>>,
+    reload_generation: Cell<u64>,
     store: Store,
 }
 
 fn parse_float(text: &str) -> Result<f64, std::num::ParseFloatError> {
     // accept both "." and "," as decimal separator
     text.trim().replace(',', ".").parse::<f64>()
+}
+
+/// Run `f` in a thread and return a channel that yields its result.
+fn spawn_blocking<T, F>(f: F) -> async_channel::Receiver<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    let (tx, rx) = async_channel::bounded(1);
+    std::thread::spawn(move || {
+        let _ = tx.send_blocking(f());
+    });
+    rx
 }
 
 impl Ui {
@@ -31,15 +45,29 @@ impl Ui {
         for row in self.rows.borrow_mut().drain(..) {
             self.list_group.remove(&row);
         }
-        let entries = match self.store.entries() {
-            Ok(e) => e,
-            Err(e) => {
-                self.toast(&format!("Error reading locations: {e}"));
+        let generation = self.reload_generation.get() + 1;
+        self.reload_generation.set(generation);
+        let store = self.store.clone();
+        let rx = spawn_blocking(move || store.entries());
+        let ui = self.clone();
+        glib::spawn_future_local(async move {
+            let result = rx.recv().await;
+            if ui.reload_generation.get() != generation {
                 return;
             }
-        };
+            match result {
+                Ok(Ok(entries)) => ui.show_entries(entries),
+                Ok(Err(e)) => ui.toast(&format!("Error reading locations: {e}")),
+                Err(_) => {}
+            }
+        });
+    }
+
+    fn show_entries(self: &Rc<Self>, entries: Vec<glib::Variant>) {
         if entries.is_empty() {
-            let row = adw::ActionRow::builder().title("No locations saved").build();
+            let row = adw::ActionRow::builder()
+                .title("No locations saved")
+                .build();
             self.list_group.add(&row);
             self.rows.borrow_mut().push(row);
             return;
@@ -69,7 +97,8 @@ impl Ui {
 
     fn finish(self: &Rc<Self>, msg: &str) {
         if self.restart_row.is_active() {
-            self.store.restart_weather();
+            let store = self.store.clone();
+            std::thread::spawn(move || store.restart_weather());
         }
         self.toast(msg);
         self.reload();
@@ -101,45 +130,52 @@ impl Ui {
         }
 
         let name_clone = name.clone();
-        let result = self.store.update_entries(|entries| {
-            let mut new_entries = entries.to_vec();
-            new_entries.insert(0, Store::build_entry(&name_clone, lat, lon)?);
-            Ok(new_entries)
+        let store = self.store.clone();
+        let rx = spawn_blocking(move || {
+            store.update_entries(|entries| {
+                let mut new_entries = entries.to_vec();
+                new_entries.insert(0, Store::build_entry(&name_clone, lat, lon)?);
+                Ok(new_entries)
+            })
         });
-
-        if let Err(e) = result {
-            self.toast(&format!("Error: {e}"));
-            return;
-        }
-        self.name_row.set_text("");
-        self.lat_row.set_text("");
-        self.lon_row.set_text("");
-        self.finish(&format!("Added \u{201c}{name}\u{201d}"));
+        let ui = self.clone();
+        glib::spawn_future_local(async move {
+            match rx.recv().await {
+                Ok(Ok(())) => {
+                    ui.name_row.set_text("");
+                    ui.lat_row.set_text("");
+                    ui.lon_row.set_text("");
+                    ui.finish(&format!("Added \u{201c}{name}\u{201d}"));
+                }
+                Ok(Err(e)) => ui.toast(&format!("Error: {e}")),
+                Err(_) => {}
+            }
+        });
     }
 
     fn on_remove(self: &Rc<Self>, idx: usize) {
-        let name = Rc::new(RefCell::new(None::<String>));
-        let name_clone = name.clone();
-
-        let result = self.store.update_entries(move |entries| {
-            if idx >= entries.len() {
-                return Err("Index out of bounds".into());
-            }
-            let n = Store::describe(&entries[idx]).0;
-            *name_clone.borrow_mut() = Some(n);
-            let mut new_entries = entries.to_vec();
-            new_entries.remove(idx);
-            Ok(new_entries)
-        });
-
-        match result {
-            Ok(_) => {
-                if let Some(n) = name.borrow().as_ref() {
-                    self.finish(&format!("Removed \u{201c}{n}\u{201d}"));
+        let store = self.store.clone();
+        let rx = spawn_blocking(move || {
+            let mut removed = String::new();
+            let result = store.update_entries(|entries| {
+                if idx >= entries.len() {
+                    return Err("Index out of bounds".into());
                 }
+                removed = Store::describe(&entries[idx]).0;
+                let mut new_entries = entries.to_vec();
+                new_entries.remove(idx);
+                Ok(new_entries)
+            });
+            (result, removed)
+        });
+        let ui = self.clone();
+        glib::spawn_future_local(async move {
+            match rx.recv().await {
+                Ok((Ok(()), removed)) => ui.finish(&format!("Removed \u{201c}{removed}\u{201d}")),
+                Ok((Err(e), _)) => ui.toast(&format!("Error: {e}")),
+                Err(_) => {}
             }
-            Err(e) => self.toast(&format!("Error: {e}")),
-        }
+        });
     }
 }
 
@@ -213,6 +249,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         restart_row,
         list_group,
         rows: RefCell::new(Vec::new()),
+        reload_generation: Cell::new(0),
         store: Store::new(),
     });
 

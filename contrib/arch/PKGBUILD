@@ -1,4 +1,5 @@
-# Maintainer: Your Name <your.email@example.com>
+# Maintainer: crian <crian84@gmail.com>
+# Contributor: Mel34 <13254332+Mel34@users.noreply.github.com>
 
 pkgname=gweather-add-loc
 pkgver=0.1.4

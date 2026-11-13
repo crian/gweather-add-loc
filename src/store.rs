@@ -139,20 +139,14 @@ impl Store {
         let name = inner.child_value(0).str().map(|s| s.to_string()).unwrap_or("(unnamed)".to_string());
 
         let coords = inner.child_value(3);
-        let coords_tuple = if coords.n_children() > 0 {
-            coords.child_value(0).as_variant()
-        } else {
-            None
-        };
-
-        let coords_deg = coords_tuple.and_then(|c| {
-            if c.n_children() != 2 {
-                return None;
-            }
-            let lat = c.child_value(0).get::<f64>()?.to_degrees();
-            let lon = c.child_value(1).get::<f64>()?.to_degrees();
-            Some((lat, lon))
-        });
+        let coords_deg = (coords.n_children() > 0)
+            .then(|| coords.child_value(0))
+            .filter(|tuple| tuple.n_children() == 2)
+            .and_then(|tuple| {
+                let lat = tuple.child_value(0).get::<f64>()?.to_degrees();
+                let lon = tuple.child_value(1).get::<f64>()?.to_degrees();
+                Some((lat, lon))
+            });
 
         (name, coords_deg)
     }
@@ -176,4 +170,19 @@ impl Store {
 #[allow(dead_code)]
 fn _assert_glib_used() -> glib::Type {
     glib::Type::INVALID
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn describe_round_trips_built_entry() {
+        let entry = Store::build_entry("Berlin", 52.52, 13.405).unwrap();
+        let (name, coords) = Store::describe(&entry);
+        assert_eq!(name, "Berlin");
+        let (lat, lon) = coords.expect("coordinates");
+        assert!((lat - 52.52).abs() < 1e-6);
+        assert!((lon - 13.405).abs() < 1e-6);
+    }
 }

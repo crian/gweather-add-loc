@@ -183,8 +183,12 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
     let toasts = adw::ToastOverlay::new();
 
     let name_row = adw::EntryRow::builder().title("Name").build();
-    let lat_row = adw::EntryRow::builder().title("Latitude (−90 … 90)").build();
-    let lon_row = adw::EntryRow::builder().title("Longitude (−180 … 180)").build();
+    let lat_row = adw::EntryRow::builder()
+        .title("Latitude (−90 … 90)")
+        .build();
+    let lon_row = adw::EntryRow::builder()
+        .title("Longitude (−180 … 180)")
+        .build();
     let restart_row = adw::SwitchRow::builder()
         .title("Restart GNOME Weather")
         .subtitle("Applies the change immediately")
@@ -208,7 +212,9 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
     let btn_group = adw::PreferencesGroup::new();
     btn_group.add(&add_btn);
 
-    let list_group = adw::PreferencesGroup::builder().title("Saved Locations").build();
+    let list_group = adw::PreferencesGroup::builder()
+        .title("Saved Locations")
+        .build();
 
     let page = adw::PreferencesPage::new();
     page.add(&add_group);

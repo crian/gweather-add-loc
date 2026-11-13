@@ -52,7 +52,11 @@ impl Store {
         let out = self.run(&["get", WEATHER_ID, "locations"])?;
         if !out.status.success() {
             let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            return Err(if err.is_empty() { "gsettings get failed".into() } else { err });
+            return Err(if err.is_empty() {
+                "gsettings get failed".into()
+            } else {
+                err
+            });
         }
         let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if text.is_empty() || text == "[]" || text == "@av []" {
@@ -69,7 +73,11 @@ impl Store {
         let out = self.run(&["set", WEATHER_ID, "locations", &text])?;
         if !out.status.success() {
             let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            return Err(if err.is_empty() { "gsettings set failed".into() } else { err });
+            return Err(if err.is_empty() {
+                "gsettings set failed".into()
+            } else {
+                err
+            });
         }
         Ok(())
     }
@@ -136,7 +144,11 @@ impl Store {
             return ("(unknown entry)".to_string(), None);
         }
 
-        let name = inner.child_value(0).str().map(|s| s.to_string()).unwrap_or("(unnamed)".to_string());
+        let name = inner
+            .child_value(0)
+            .str()
+            .map(|s| s.to_string())
+            .unwrap_or("(unnamed)".to_string());
 
         let coords = inner.child_value(3);
         let coords_deg = (coords.n_children() > 0)

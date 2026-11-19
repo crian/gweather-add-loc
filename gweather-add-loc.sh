@@ -73,13 +73,13 @@ if ! in_range "$LON" 180; then
 fi
 
 # Build the GVariant entry using Python + GLib (robust, handles all escaping)
-# Falls back to awk-based method if python3-gi not available.
+# Falls back to the awk-based method if python3-gi is unavailable or fails.
 build_gvariant_entry() {
     local name="$1" lat_deg="$2" lon_deg="$3"
 
     # Try Python with GLib first (proper GVariant encoding)
     if python3 -c "import gi; gi.require_version('GLib', '2.0'); from gi.repository import GLib" 2>/dev/null; then
-        python3 -c "
+        if ENTRY=$(python3 -c "
 import sys
 import math
 from gi.repository import GLib
@@ -98,10 +98,14 @@ empty_array = GLib.Variant('a(dd)', [])
 inner = GLib.Variant('(ssba(dd)a(dd))', [name, '', False, coords_array, empty_array])
 outer = GLib.Variant('(uv)', [2, inner])
 
-# Print in GVariant text format
-print(outer.print(False))
-" "$name" "$lat_deg" "$lon_deg"
-        return
+# Print in GVariant text format, boxed as a variant: the locations
+# array has type 'av', so each element must be wrapped in '<...>'.
+print(GLib.Variant.new_variant(outer).print_(False))
+" "$name" "$lat_deg" "$lon_deg" 2>/dev/null) && [ -n "$ENTRY" ]; then
+            printf '%s\n' "$ENTRY"
+            return
+        fi
+        echo "Warning: Python/GLib encoding failed, falling back to awk." >&2
     fi
 
     # Fallback: awk-based method (original)

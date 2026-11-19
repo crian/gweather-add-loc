@@ -115,9 +115,9 @@ impl Store {
         let lat = lat_deg.to_radians();
         let lon = lon_deg.to_radians();
 
-        // Use GLib's Variant to properly escape the name, then embed in the
-        // libgweather-4 GVariant text format. This is the compatible approach
-        // for glib 0.10 which lacks Variant::tuple() and variant! macro.
+        // Use GLib's Variant to escape the name, then embed it in the
+        // libgweather-4 GVariant text format (the same format `gsettings`
+        // prints and parses).
         let name_escaped = name.to_variant().print(false);
         let text = format!(
             "<(uint32 2, <({name_escaped}, '', false, [({lat:.10}, {lon:.10})], @a(dd) [])>)>"

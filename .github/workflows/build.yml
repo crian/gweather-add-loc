@@ -78,6 +78,7 @@ jobs:
             gweather-add-loc.sh \
             contrib/arch/bump.sh \
             .github/scripts/changelog-entry.sh \
+            .github/scripts/test-script.sh \
             .github/scripts/update-changelog.sh
 
       - name: Test changelog scripts
@@ -111,8 +112,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-glib-2.0
+
       - name: Test script syntax
         run: bash -n gweather-add-loc.sh
 
       - name: Test script help
         run: ./gweather-add-loc.sh --help
+
+      - name: Smoke test GVariant output
+        run: ./.github/scripts/test-script.sh

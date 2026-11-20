@@ -118,6 +118,14 @@ Latitude comes first. `.` and `,` both work as decimal separator.
 
 By default the new location is put at the **top** of the list, so GNOME Weather uses it as the current location. Use `--no-restart` to skip restarting GNOME Weather.
 
+#### 📦 Dependencies
+
+`awk` is required. If PyGObject is available, the script uses GLib to encode the `libgweather-4` value; otherwise it falls back to an awk-based encoder. PyGObject is optional but handles unusual location names more robustly:
+
+* **Debian/Ubuntu:** `sudo apt install python3-gi`
+* **Fedora:** `sudo dnf install python3-gobject`
+* **Arch Linux:** `sudo pacman -S python-gobject`
+
 #### 💡 Example
 
 Add Berlin:

@@ -3,7 +3,7 @@
 
 pkgname=gweather-add-loc
 pkgver=0.1.5
-pkgrel=1
+pkgrel=2
 pkgdesc="Add custom locations with arbitrary coordinates to GNOME Weather"
 arch=('x86_64')
 url="https://github.com/crian/gweather-add-loc"
@@ -27,6 +27,7 @@ makedepends=(
 optdepends=(
     'gnome-weather: the app these locations are added to'
     'flatpak: support for Flatpak installations of GNOME Weather'
+    'python-gobject: robust GVariant encoding in the helper script'
 )
 
 source=(

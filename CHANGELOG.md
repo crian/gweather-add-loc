@@ -25,6 +25,7 @@ with [git-cliff](https://git-cliff.org/).
 - **script:** Write valid GVariant entries
 - **ui:** Harden signals, removal and layout
 - **store:** Build typed entries and retry less
+- **ui:** Keep add button below the form
 
 ### Internal
 

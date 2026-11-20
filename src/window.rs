@@ -215,6 +215,10 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         .halign(gtk::Align::Center)
         .css_classes(["suggested-action", "pill"])
         .build();
+    // libadwaita 1.4 has no button row, so the action lives in its own group
+    // directly below the form instead of at the bottom of the page.
+    let btn_group = adw::PreferencesGroup::new();
+    btn_group.add(&add_btn);
 
     let list_group = adw::PreferencesGroup::builder()
         .title("Saved Locations")
@@ -222,21 +226,8 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
 
     let page = adw::PreferencesPage::new();
     page.add(&add_group);
+    page.add(&btn_group);
     page.add(&list_group);
-    page.set_vexpand(true);
-
-    // Keep the action outside the preferences groups, which are meant to
-    // contain rows only.
-    let button_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    button_box.set_margin_top(12);
-    button_box.set_margin_bottom(18);
-    button_box.set_margin_start(12);
-    button_box.set_margin_end(12);
-    button_box.append(&add_btn);
-
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    content.append(&page);
-    content.append(&button_box);
 
     let menu = gio::Menu::new();
     menu.append(Some("Reload"), Some("win.reload"));
@@ -253,7 +244,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
 
     let view = adw::ToolbarView::new();
     view.add_top_bar(&header);
-    view.set_content(Some(&content));
+    view.set_content(Some(&page));
     toasts.set_child(Some(&view));
 
     let window = adw::ApplicationWindow::builder()

@@ -1,7 +1,7 @@
 //! Backend: reads/writes the org.gnome.Weather `locations` key (type `av`)
 //! via gsettings, for native and Flatpak GNOME Weather.
 
-use gtk::glib::{self, prelude::ToVariant, Variant, VariantTy};
+use gtk::glib::{prelude::ToVariant, Variant, VariantTy};
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -181,11 +181,6 @@ impl Store {
         std::thread::sleep(Duration::from_millis(500));
         let _ = cmd.stdout(Stdio::null()).stderr(Stdio::null()).spawn();
     }
-}
-
-#[allow(dead_code)]
-fn _assert_glib_used() -> glib::Type {
-    glib::Type::INVALID
 }
 
 #[cfg(test)]

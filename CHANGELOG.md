@@ -9,6 +9,29 @@ with [git-cliff](https://git-cliff.org/).
 
 ## Unreleased
 
+## 0.1.6 - 2026-11-20
+
+### Changed
+
+- **store:** Drop unused glib guard
+
+### Documentation
+
+- **store:** Drop outdated GLib comment
+- Document optional PyGObject for the script
+
+### Fixed
+
+- **script:** Write valid GVariant entries
+- **ui:** Harden signals, removal and layout
+- **store:** Build typed entries and retry less
+
+### Internal
+
+- Update release action and add dependabot
+- Bump actions/checkout from 5 to 7 in the actions group (#6)
+- **script:** Smoke test GVariant output
+
 ## 0.1.5 - 2026-11-13
 
 ### Fixed

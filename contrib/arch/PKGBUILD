@@ -34,7 +34,7 @@ source=(
     "$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
 )
 
-sha256sums=('7e191874cf19ad4db856afcb34e76f48d6efc91f4c649f7ef96fe36bde1288f1')
+sha256sums=('f2f938ad1bbcbc197067566eca1f6444f6a39c8773ae24ac1777b1dca262ba05')
 
 prepare() {
     cd "$pkgname-$pkgver"

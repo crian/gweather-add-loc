@@ -72,7 +72,7 @@ impl Ui {
             self.rows.borrow_mut().push(row);
             return;
         }
-        for (idx, entry) in entries.iter().enumerate() {
+        for entry in entries.iter() {
             let (name, coords) = Store::describe(entry);
             let sub = coords
                 .map(|(lat, lon)| format!("{lat:.4}, {lon:.4}"))
@@ -87,8 +87,15 @@ impl Ui {
                 .tooltip_text("Remove")
                 .css_classes(["flat"])
                 .build();
-            let ui = self.clone();
-            btn.connect_clicked(move |_| ui.on_remove(idx));
+            // Weak reference: the button lives inside `list_group`, which is
+            // owned by `Ui`, so a strong reference here would form a cycle.
+            let ui = Rc::downgrade(self);
+            let entry = entry.clone();
+            btn.connect_clicked(move |_| {
+                if let Some(ui) = ui.upgrade() {
+                    ui.on_remove(entry.clone());
+                }
+            });
             row.add_suffix(&btn);
             self.list_group.add(&row);
             self.rows.borrow_mut().push(row);
@@ -120,12 +127,12 @@ impl Ui {
                 return;
             }
         };
-        if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
-            self.toast("Coordinates out of range");
-            return;
-        }
         if !lat.is_finite() || !lon.is_finite() {
             self.toast("Coordinates must be finite numbers");
+            return;
+        }
+        if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
+            self.toast("Coordinates out of range");
             return;
         }
 
@@ -134,7 +141,7 @@ impl Ui {
         let rx = spawn_blocking(move || {
             store.update_entries(|entries| {
                 let mut new_entries = entries.to_vec();
-                new_entries.insert(0, Store::build_entry(&name_clone, lat, lon)?);
+                new_entries.insert(0, Store::build_entry(&name_clone, lat, lon));
                 Ok(new_entries)
             })
         });
@@ -153,15 +160,14 @@ impl Ui {
         });
     }
 
-    fn on_remove(self: &Rc<Self>, idx: usize) {
+    fn on_remove(self: &Rc<Self>, entry: glib::Variant) {
         let store = self.store.clone();
         let rx = spawn_blocking(move || {
-            let mut removed = String::new();
+            let removed = Store::describe(&entry).0;
             let result = store.update_entries(|entries| {
-                if idx >= entries.len() {
-                    return Err("Index out of bounds".into());
-                }
-                removed = Store::describe(&entries[idx]).0;
+                let Some(idx) = entries.iter().position(|current| *current == entry) else {
+                    return Err("Location no longer exists".into());
+                };
                 let mut new_entries = entries.to_vec();
                 new_entries.remove(idx);
                 Ok(new_entries)
@@ -209,8 +215,6 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         .halign(gtk::Align::Center)
         .css_classes(["suggested-action", "pill"])
         .build();
-    let btn_group = adw::PreferencesGroup::new();
-    btn_group.add(&add_btn);
 
     let list_group = adw::PreferencesGroup::builder()
         .title("Saved Locations")
@@ -218,8 +222,21 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
 
     let page = adw::PreferencesPage::new();
     page.add(&add_group);
-    page.add(&btn_group);
     page.add(&list_group);
+    page.set_vexpand(true);
+
+    // Keep the action outside the preferences groups, which are meant to
+    // contain rows only.
+    let button_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    button_box.set_margin_top(12);
+    button_box.set_margin_bottom(18);
+    button_box.set_margin_start(12);
+    button_box.set_margin_end(12);
+    button_box.append(&add_btn);
+
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    content.append(&page);
+    content.append(&button_box);
 
     let menu = gio::Menu::new();
     menu.append(Some("Reload"), Some("win.reload"));
@@ -236,7 +253,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
 
     let view = adw::ToolbarView::new();
     view.add_top_bar(&header);
-    view.set_content(Some(&page));
+    view.set_content(Some(&content));
     toasts.set_child(Some(&view));
 
     let window = adw::ApplicationWindow::builder()
@@ -260,12 +277,22 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
     });
 
     for r in [&ui.name_row, &ui.lat_row, &ui.lon_row] {
-        let u = ui.clone();
-        r.connect_entry_activated(move |_| u.on_add());
+        // Weak references avoid cycles through the widget tree; the window's
+        // action entry keeps `Ui` alive for as long as the window exists.
+        let u = Rc::downgrade(&ui);
+        r.connect_entry_activated(move |_| {
+            if let Some(u) = u.upgrade() {
+                u.on_add();
+            }
+        });
     }
     {
-        let u = ui.clone();
-        add_btn.connect_clicked(move |_| u.on_add());
+        let u = Rc::downgrade(&ui);
+        add_btn.connect_clicked(move |_| {
+            if let Some(u) = u.upgrade() {
+                u.on_add();
+            }
+        });
     }
     {
         let u = ui.clone();

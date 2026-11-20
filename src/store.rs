@@ -82,9 +82,12 @@ impl Store {
         Ok(())
     }
 
-    /// Atomically update entries with a compare-and-swap retry loop.
-    /// Calls `f` with current entries, expects new entries to write back.
-    /// Retries up to `max_attempts` times if the data changed concurrently.
+    /// Read-modify-write update with a bounded retry loop.
+    ///
+    /// Calls `f` with the current entries and writes back the returned ones.
+    /// GSettings has no compare-and-swap, so concurrent writers can still
+    /// overwrite each other; retries only help with transient write failures
+    /// and are skipped when the stored value did not change.
     pub fn update_entries<F>(&self, mut f: F) -> Result<(), String>
     where
         F: FnMut(&[Variant]) -> Result<Vec<Variant>, String>,
@@ -93,17 +96,15 @@ impl Store {
         for attempt in 1..=MAX_ATTEMPTS {
             let current = self.entries()?;
             let new_entries = f(&current)?;
-            // Try to write - if gsettings fails, it's a real error (not a race)
             match self.set_entries(&new_entries) {
                 Ok(()) => return Ok(()),
                 Err(e) => {
-                    // If this is the last attempt, return the error
-                    if attempt == MAX_ATTEMPTS {
+                    // A persistent error does not become a transient one by
+                    // retrying, so only retry if the value changed meanwhile.
+                    let unchanged = self.entries().is_ok_and(|after| after == current);
+                    if attempt == MAX_ATTEMPTS || unchanged {
                         return Err(e);
                     }
-                    // Otherwise, the write failed - could be a race or real error.
-                    // We can't easily distinguish, so just retry.
-                    // A small delay helps reduce contention.
                     std::thread::sleep(Duration::from_millis(50 * attempt as u64));
                 }
             }
@@ -111,18 +112,21 @@ impl Store {
         Err("update_entries: max attempts reached".into())
     }
 
-    pub fn build_entry(name: &str, lat_deg: f64, lon_deg: f64) -> Result<Variant, String> {
-        let lat = lat_deg.to_radians();
-        let lon = lon_deg.to_radians();
-
-        // Use GLib's Variant to escape the name, then embed it in the
-        // libgweather-4 GVariant text format (the same format `gsettings`
-        // prints and parses).
-        let name_escaped = name.to_variant().print(false);
-        let text = format!(
-            "<(uint32 2, <({name_escaped}, '', false, [({lat:.10}, {lon:.10})], @a(dd) [])>)>"
-        );
-        Variant::parse(None, &text).map_err(|e| e.to_string())
+    pub fn build_entry(name: &str, lat_deg: f64, lon_deg: f64) -> Variant {
+        let coords = vec![(lat_deg.to_radians(), lon_deg.to_radians())];
+        let inner = (
+            name.to_string(),
+            String::new(),
+            false,
+            coords,
+            Vec::<(f64, f64)>::new(),
+        )
+            .to_variant();
+        // libgweather-4 stores `(uint32, v)`, boxed as a `v` inside `av`.
+        // `Variant` implements `ToVariant` by boxing, so no explicit
+        // `from_variant` is needed for the inner value.
+        let entry = (2u32, inner).to_variant();
+        Variant::from_variant(&entry)
     }
 
     /// (name, lat_deg, lon_deg) of an entry, best effort.
@@ -190,11 +194,18 @@ mod tests {
 
     #[test]
     fn describe_round_trips_built_entry() {
-        let entry = Store::build_entry("Berlin", 52.52, 13.405).unwrap();
+        let entry = Store::build_entry("Berlin", 52.52, 13.405);
         let (name, coords) = Store::describe(&entry);
         assert_eq!(name, "Berlin");
         let (lat, lon) = coords.expect("coordinates");
         assert!((lat - 52.52).abs() < 1e-6);
         assert!((lon - 13.405).abs() < 1e-6);
+    }
+
+    #[test]
+    fn build_entry_escapes_but_keeps_names() {
+        let name = "O'Brien \"x\" & <y> Zürich";
+        let entry = Store::build_entry(name, 0.0, 0.0);
+        assert_eq!(Store::describe(&entry).0, name);
     }
 }
